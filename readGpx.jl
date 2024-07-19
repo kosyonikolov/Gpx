@@ -2,6 +2,9 @@ using EzXML
 using Dates
 using Interpolations
 using Plots
+using Distances
+
+include("kernelRegression.jl")
 
 function readGpx(fileName::AbstractString)
     lines = readlines(fileName)
@@ -104,4 +107,44 @@ function plotGpxVam(fileName::AbstractString)
     outName = "$id.svg"
     println(outName)
     savefig(p, outName)
+end
+
+function calculateSpeedFiltered(gpx::AbstractMatrix{<:Number}, σ::Number = 5)
+    n, m = size(gpx)
+    @assert(m >= 3)
+
+    R = 6372.8 * 1000 # meters
+
+    # Filter latitude and longitude
+    t, lat = kernelRegression(gpx[:,1], gpx[:,2], 1, σ)
+    t, lon = kernelRegression(gpx[:,1], gpx[:,3], 1, σ)
+
+    # Calculate speed on filtered data
+    n = lastindex(t)
+    result = zeros(n - 1, 2)
+    for i = 1:(n - 1)
+        result[i, 1] = t[i] + 0.5
+        # !!! Need to swap lat / lon for correct distance !!!
+        p0 = (lon[i, 1], lat[i, 1])
+        p1 = (lon[i + 1, 1], lat[i + 1, 1])
+        d = haversine(p0, p1, R) # meters
+        result[i, 2] = 3.6 * d # km/h
+    end
+
+    return result
+end
+
+function filterGpx(gpx::AbstractMatrix{<:Number}, σ::Number)
+    m = size(gpx)[2]
+    t, lat = kernelRegression(gpx[:,1], gpx[:,2], 1, σ)
+    n = lastindex(t)
+    result = zeros(n, m)
+    result[:,1] .= t
+    result[:,2] .= lat[:,1]
+    for i = 3:m
+        _, val = kernelRegression(gpx[:,1], gpx[:,i], 1, σ)
+        result[:,i] .= val[:,1]
+    end
+
+    return result
 end
