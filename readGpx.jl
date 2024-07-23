@@ -148,3 +148,28 @@ function filterGpx(gpx::AbstractMatrix{<:Number}, σ::Number)
 
     return result
 end
+
+function plotSpeedAndAltitude(gpx::AbstractMatrix{<:Number}, σ::Number = 12)
+    minH = minimum(gpx[:,4])
+    n = size(gpx)[1]
+    
+    spd = calculateSpeedFiltered(gpx, σ)
+
+    # Convert time to minutes
+    t = spd[:,1] ./ 60
+
+    # Pretty ranges
+    tMax = 10 * (ceil(Int64, t[end] / 10))
+    vMax = ceil(Int64, maximum(spd[:,2]))
+
+    p = plot(t, spd[:,2], yticks=0:1:vMax, gridalpha=0.5, gridwidth=0.5,
+             size=(1600,900), xticks=0:1:tMax, label = "",
+             title = "Speed")
+    hline!(p, 0:1:vMax, label = "", color = :black, alpha = 0.5, linewidth=0.5)
+
+    p2 = twinx(p)
+    plot!(p2, gpx[:,1] ./ 60, minH .* ones(n), fillrange = gpx[:,4], 
+          color = :gray, label = "", alpha=0.3)
+
+    return p
+end
