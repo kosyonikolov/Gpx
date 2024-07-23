@@ -2,6 +2,16 @@
 function fitPolyWeighted(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}, w::AbstractVector{<:Number}, deg::Integer)
     n = lastindex(x)
     @assert(n == lastindex(y) && n == lastindex(w))
+
+    if n == 0
+        return zeros(deg + 1)
+    end
+    if n < deg + 1
+        r = zeros(deg + 1)
+        r[1:n] = fitPolyWeighted(x, y, w, n - 1)
+        return r
+    end
+
     @assert(n >= deg + 1)
 
     m = zeros(deg + 1, deg + 1)
@@ -60,4 +70,32 @@ function kernelRegression(x::AbstractVector{<:Number}, y::AbstractVector{<:Numbe
     end
 
     return q, result
+end
+
+function kernelRegressionPoint(x::AbstractVector{<:Number}, y::AbstractVector{<:Number},
+                               q::Number, sigma::Number; deg::Integer = 1, cutoffSigma::Number = 3)
+    #@assert(issorted(x))
+    n = lastindex(x)
+    @assert(n == lastindex(y))
+
+    cutoff = sigma * cutoffSigma
+
+    iHigh = searchsortedlast(x, q + cutoff)
+    iLow = searchsortedfirst(x, q - cutoff)
+
+    xs = Vector{Float32}()
+    ys = Vector{Float32}()
+    ws = Vector{Float32}()
+
+    for j = iLow:iHigh
+        d = x[j] - q
+        push!(xs, d)
+        push!(ys, y[j])
+        push!(ws, exp(-d^2 / sigma^2))
+        j += 1
+    end
+
+    poly = fitPolyWeighted(xs, ys, ws, deg)
+
+    return poly
 end

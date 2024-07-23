@@ -173,3 +173,64 @@ function plotSpeedAndAltitude(gpx::AbstractMatrix{<:Number}, σ::Number = 12)
 
     return p
 end
+
+function plotSpeedAndAltitude(fileName::AbstractString, σ::Number = 12)
+    gpx = readGpx2(fileName)
+    p = plotSpeedAndAltitude(gpx, σ)
+
+    id, _ = splitext(fileName)
+    outName = "$(id)_speed.svg"
+    println(outName)
+    savefig(p, outName)
+end
+
+function plotGpxVam2(gpx::AbstractMatrix{<:Number}; h::Number = 5, Δ::Number = 60, σ::Number = 15)
+    @assert(size(gpx)[2] >= 4)
+    t0 = gpx[1,1] + Δ/2
+    t1 = gpx[end,1] - Δ/2
+    ts = range(t0, t1, ceil(Int64, (t1 - t0) / h))
+    n = lastindex(ts)
+    vam = zeros(n)
+    for i = 1:n
+        h0 = kernelRegressionPoint(gpx[:,1], gpx[:,4], ts[i] - Δ/2, σ)[1]
+        h1 = kernelRegressionPoint(gpx[:,1], gpx[:,4], ts[i] + Δ/2, σ)[1]
+        vam[i] = max(0, 3600 * (h1 - h0) / Δ)
+    end
+
+    vamMax = 100 * ceil(Int64, maximum(vam) / 100)
+    vamTicks = 0:100:vamMax
+    tMax = 10 * ceil(Int64, (ts[end] ./ 60) / 10)
+    timeTicks = 0:10:tMax
+
+    p = plot(ts ./ 60, vam, yticks = vamTicks, ylims=(0,vamMax),
+             label = "", xticks = timeTicks, linewidth=1.2,
+             size=(1600,900))
+    hline!(p, vamTicks, color = :black, alpha = 0.7, linewidth=0.8, label="")
+    timeTicks = collect(timeTicks)
+    vline!(p, timeTicks, color = :black, alpha = 0.7, linewidth=0.8, label="")
+
+    subTimeTicks = 0:2:tMax
+    vline!(p, subTimeTicks, color = :black, alpha = 0.5, linewidth=0.5, label="")
+
+    p2 = twinx(p)
+    minH = minimum(gpx[:,4])
+    maxH = maximum(gpx[:,4])
+    plot!(p2, gpx[:,1] ./ 60, minH .* ones(size(gpx)[1]), fillrange = gpx[:,4], 
+          color = :gray, label = "", alpha=0.3, ylims=(minH,maxH))
+    return p
+end
+
+function plotGpxVam2(fileName::AbstractString; h::Number = 5, Δ::Number = 60, σ::Number = 15)
+    gpx = readGpx2(fileName)
+    p = plotGpxVam2(gpx, h = h, Δ = Δ, σ = σ)
+
+    id, _ = splitext(fileName)
+    outName = "$(id)_vam.svg"
+    println(outName)
+    savefig(p, outName)
+end
+
+function plotRunGpx(fileName::AbstractString)
+    plotSpeedAndAltitude(fileName)
+    plotGpxVam2(fileName)
+end
