@@ -159,17 +159,18 @@ function plotSpeedAndAltitude(gpx::AbstractMatrix{<:Number}, σ::Number = 12)
     t = spd[:,1] ./ 60
 
     # Pretty ranges
-    tMax = 10 * (ceil(Int64, t[end] / 10))
+    #tMax = 10 * (ceil(Int64, t[end] / 10))
+    tMax = ceil(Int64, t[end])
     vMax = ceil(Int64, maximum(spd[:,2]))
 
     p = plot(t, spd[:,2], yticks=0:1:vMax, gridalpha=0.5, gridwidth=0.5,
-             size=(1600,900), xticks=0:1:tMax, label = "",
+             size=(1600,900), xticks=0:1:tMax, xlims = (0, tMax), label = "",
              title = "Speed")
     hline!(p, 0:1:vMax, label = "", color = :black, alpha = 0.5, linewidth=0.5)
 
     p2 = twinx(p)
     plot!(p2, gpx[:,1] ./ 60, minH .* ones(n), fillrange = gpx[:,4], 
-          color = :gray, label = "", alpha=0.3)
+          color = :gray, xlims = (0, tMax), label = "", alpha=0.3)
 
     return p
 end
@@ -190,20 +191,25 @@ function plotGpxVam2(gpx::AbstractMatrix{<:Number}; h::Number = 5, Δ::Number = 
     t1 = gpx[end,1] - Δ/2
     ts = range(t0, t1, ceil(Int64, (t1 - t0) / h))
     n = lastindex(ts)
-    vam = zeros(n)
+    vam = Vector{Float32}()
+    realT = Vector{Float32}()
     for i = 1:n
-        h0 = kernelRegressionPoint(gpx[:,1], gpx[:,4], ts[i] - Δ/2, σ)[1]
-        h1 = kernelRegressionPoint(gpx[:,1], gpx[:,4], ts[i] + Δ/2, σ)[1]
-        vam[i] = max(0, 3600 * (h1 - h0) / Δ)
+        h0 = kernelRegressionPoint(gpx[:,1], gpx[:,4], ts[i] - Δ/2, σ)
+        h1 = kernelRegressionPoint(gpx[:,1], gpx[:,4], ts[i] + Δ/2, σ)
+        if ismissing(h0) || ismissing(h1)
+            continue
+        end
+        push!(vam, max(0, 3600 * (h1[1] - h0[1]) / Δ))
+        push!(realT, ts[i])
     end
 
     vamMax = 100 * ceil(Int64, maximum(vam) / 100)
     vamTicks = 0:100:vamMax
-    tMax = 10 * ceil(Int64, (ts[end] ./ 60) / 10)
+    tMax = 10 * ceil(Int64, (realT[end] ./ 60) / 10)
     timeTicks = 0:10:tMax
 
-    p = plot(ts ./ 60, vam, yticks = vamTicks, ylims=(0,vamMax),
-             label = "", xticks = timeTicks, linewidth=1.2,
+    p = plot(realT ./ 60, vam, yticks = vamTicks, ylims=(0,vamMax),
+             label = "", xticks = timeTicks, linewidth=1.2, xlims=(timeTicks[1], timeTicks[end]),
              size=(1600,900))
     hline!(p, vamTicks, color = :black, alpha = 0.7, linewidth=0.8, label="")
     timeTicks = collect(timeTicks)
@@ -216,7 +222,7 @@ function plotGpxVam2(gpx::AbstractMatrix{<:Number}; h::Number = 5, Δ::Number = 
     minH = minimum(gpx[:,4])
     maxH = maximum(gpx[:,4])
     plot!(p2, gpx[:,1] ./ 60, minH .* ones(size(gpx)[1]), fillrange = gpx[:,4], 
-          color = :gray, label = "", alpha=0.3, ylims=(minH,maxH))
+          color = :gray, label = "", alpha=0.3, ylims=(minH,maxH), xlims=(timeTicks[1], timeTicks[end]))
     return p
 end
 

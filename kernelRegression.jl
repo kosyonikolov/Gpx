@@ -95,6 +95,11 @@ function kernelRegressionPoint(x::AbstractVector{<:Number}, y::AbstractVector{<:
         j += 1
     end
 
+    n = lastindex(xs)
+    if n < deg + 1
+        return missing
+    end
+
     poly = fitPolyWeighted(xs, ys, ws, deg)
 
     return poly
