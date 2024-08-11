@@ -240,3 +240,72 @@ function plotRunGpx(fileName::AbstractString)
     plotSpeedAndAltitude(fileName)
     plotGpxVam2(fileName)
 end
+
+function calculateTopVams(gpx::AbstractMatrix{<:Number}, maxTMinutes::Integer = 20; σ::Number = 15, searchStep::Number = 1)
+    @assert(size(gpx)[2] >= 4)
+    t0 = gpx[1,1]
+    t1 = gpx[end,1]
+    maxT = min(floor(Int32, (t1 - t0) / 60), maxTMinutes)
+    result = zeros(maxT, 2)
+    result[:,1] = range(1,maxT)
+
+    t = t0
+    while t < t1
+        h0 = kernelRegressionPoint(gpx[:,1], gpx[:,4], t, σ)
+        if ismissing(h0)
+            break
+        end
+
+        hadSegments = false
+        for d = 1:maxT # Duration in minutes
+            t2 = t + d * 60
+            if t2 > t1
+                break
+            end
+            h1 = kernelRegressionPoint(gpx[:,1], gpx[:,4], t2, σ)
+            if ismissing(h1)
+                break
+            end
+
+            hadSegments = true
+            candVam = (h1[1] - h0[1]) * 60 / d
+            if candVam > result[d,2]
+                result[d,2] = candVam
+            end
+        end
+        t += searchStep
+        if !hadSegments
+            break
+        end
+    end
+
+    return result
+end
+
+function plotTopVams(topVams::AbstractMatrix{<:Number})
+    @assert(size(topVams)[2] == 2)
+    minVam = minimum(topVams[:,2])
+    maxVam = maximum(topVams[:,2])
+    vam0 = 100 * floor(Int64, minVam / 100)
+    vam1 = 100 * ceil(Int64, maxVam / 100)
+
+    t1 = 5 * ceil(Int64, maximum(topVams[:,1]) / 5)
+    p = plot(topVams[:,1], topVams[:,2], yticks = vam0:100:vam1, ylims=(vam0,vam1),
+             gridalpha=0.4, gridwidth=2, 
+             minorgrid = true, minorgridalpha = 0.3, minorgridwidth = 1,
+             label = "", xticks = 0:5:t1, linewidth=1.2, xlims=(0, t1),
+             title = "Best VAM for duration (minutes)",
+             size=(960, 640)) 
+
+    return p
+end
+
+function plotGpxTopVam(gpxFileName::AbstractString, maxTMinutes::Integer = 20; σ::Number = 15, searchStep::Number = 1)
+    gpx = readGpx2(gpxFileName)
+    topVams = calculateTopVams(gpx, maxTMinutes, σ = σ, searchStep = searchStep)
+    p = plotTopVams(topVams)
+    id, _ = splitext(gpxFileName)
+    outName = "$(id)_topVam.svg"
+    println(outName)
+    savefig(p, outName)
+end
